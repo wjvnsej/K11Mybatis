@@ -16,6 +16,14 @@
 $(function(){
 	
 });
+
+function deleteRow(idx) {
+	
+	if(confirm("정말로 삭제하시겠습니까?")){
+		location.href="delete.do?idx=" + idx;
+	}
+	
+}
 </script>
 
 </head>
@@ -23,6 +31,17 @@ $(function(){
 <div class="container">
 	<h3 class="text-center">방명록(한줄게시판)</h3>
 	
+	<div class="text-center">
+	<form method="get">
+		<select name="searchField">
+			<option value="contents">내용</option>
+			<option value="name">작성자</option>
+		</select>
+		<input type="text" name="searchTxt" />
+		<input type="submit" value="검색" />
+	</form>
+	</div>
+		
 	<!-- 글쓰기버튼 및 로그인/로그아웃 버튼 -->
 	<div class="text-right">
 		<c:choose>
@@ -56,6 +75,10 @@ $(function(){
 				</div>	  
 				<!--  수정,삭제버튼 -->
 				<div class="media-right">
+					<!-- 
+					세션영역의 id와 게시물의 id를 비교한다.
+					즉, 작성자 본인에게만 수정/삭제 버튼이 보이게 처리한다. 
+					-->
 					<c:if test="${sessionScope.siteUserInfo.id eq row.id }">
 						<button class="btn btn-primary" onclick="location.href='modify.do?idx=${row.idx}';">
 							수정

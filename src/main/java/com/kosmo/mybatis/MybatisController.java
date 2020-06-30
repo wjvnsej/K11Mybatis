@@ -10,12 +10,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.ModelAndView;
 
 import mybatis.MemberVO;
 import mybatis.MyBoardDTO;
 import mybatis.MybatisDAOImpl;
 import mybatis.MybatisMemberImpl;
+import mybatis.ParameterDTO;
+import util.EnvFileReader;
 import util.PagingUtil;
 
 @Controller
@@ -31,12 +34,17 @@ public class MybatisController {
 	//방명록 리스트
 	@RequestMapping("/mybatis/list.do")
 	public String list(Model model, HttpServletRequest req) {
+				
+		ParameterDTO parameterDTO = new ParameterDTO();
+		parameterDTO.setSearchField(req.getParameter("searchField"));
+		parameterDTO.setSearchTxt(req.getParameter("searchTxt"));
+		System.out.println("검색어 : " + parameterDTO.getSearchTxt());
 		
-		int totalRecordCount = sqlSession.getMapper(MybatisDAOImpl.class).getTotalCount();
+		int totalRecordCount = sqlSession.getMapper(MybatisDAOImpl.class).getTotalCount(parameterDTO);
 		
 		//페이지 처리를 위한 설정값
-		int pageSize = 4;
-		int blockPage = 2;
+		int pageSize = Integer.parseInt(EnvFileReader.getValue("SpringBbsInit.properties", "SpringBoard.pageSize"));
+		int blockPage = Integer.parseInt(EnvFileReader.getValue("SpringBbsInit.properties", "SpringBoard.blockPage"));
 		
 		//전체 페이지수 계산
 		int totalPage = (int)Math.ceil((double)totalRecordCount / pageSize);
@@ -45,9 +53,12 @@ public class MybatisController {
 		int nowPage = req.getParameter("nowPage") == null ? 1 : Integer.parseInt(req.getParameter("nowPage"));
 		int start = (nowPage - 1) * pageSize + 1;
 		int end = nowPage * pageSize;
+		//위에서 계산한 start, end를 DTO에 저장
+		parameterDTO.setStart(start);
+		parameterDTO.setEnd(end);
 		
 		//리스트 페이지에 출력할 게시물 가져오기
-		ArrayList<MyBoardDTO> lists = sqlSession.getMapper(MybatisDAOImpl.class).listPage(start, end);
+		ArrayList<MyBoardDTO> lists = sqlSession.getMapper(MybatisDAOImpl.class).listPage(parameterDTO);
 		
 		//페이지 번호에 대한 처리
 		String path = req.getContextPath() + "/mybatis/list.do?";
@@ -118,7 +129,92 @@ public class MybatisController {
 			mv.setViewName(backUrl);
 		}
 		return mv;
+	}
+	
+	@RequestMapping(value="/mybatis/writeAction.do", method = RequestMethod.POST)
+	public String writeAction(Model model, HttpServletRequest req, HttpSession session) {
 		
+		//세션영역에 사용자정보가 이쓴ㄴ지 확인
+		if(session.getAttribute("siteUserInfo") == null) {
+			//로그인이 해제된 상태라면 로그인 페이지로 이동한다.
+			return "redirect:login.do";
+		}
+		
+		//Mybatis사용
+		sqlSession.getMapper(MybatisDAOImpl.class).write(
+				req.getParameter("name"), req.getParameter("contents"), 
+					((MemberVO)session.getAttribute("siteUserInfo")).getId());
+		/*
+		세션영역에 저장된 MemberVo객체에서 아이디 가져오기
+		1. Object타입으로 저장된 VO객체를 가져온다.
+		2. MemberVo 타입으로 형 변환 한다.
+		3. 형 변환된 객체를 통해 getter()를 호출하여 아이디를 얻어온다.
+		*/
+		
+		//글 작성이 완료되면 리스트로 이동한다
+		return "redirect:list.do";
+	}
+	
+	//로그아웃
+	@RequestMapping("/mybatis/logout.do")
+	public String logout(HttpSession session) {
+		//세션영역을 비워준다.
+		session.setAttribute("siteUserInfo", null);
+		return "redirect:login.do";
+	}
+	
+	@RequestMapping("/mybatis/modify.do")
+	public String modify(Model model, HttpServletRequest req, HttpSession session) {
+		
+		//로그인 확인
+		if(session.getAttribute("siteUserInfo") == null) {
+			return "redirect:login.do";
+		}
+		/*
+		여러개의 폼값을 한번에 Mapper쪽으로 전달하기 위해
+		DTO객체를 사용한다. 해당 객체는 Mapper에서 즉시 
+		사용할 수 있다.
+		*/
+		ParameterDTO parameterDTO = new ParameterDTO();
+		parameterDTO.setBoard_idx(req.getParameter("idx")); //일련번호
+		parameterDTO.setUser_id(((MemberVO)session.getAttribute("siteUserInfo")).getId()); //사용자아이디
+		
+		//Mybatis 호출 시 DTO객체를 파라미터로 전달
+		MyBoardDTO dto = sqlSession.getMapper(MybatisDAOImpl.class).view(parameterDTO);
+		
+		model.addAttribute("dto", dto);
+		return "07Mybatis/modify";
+	}
+	
+	//수정처리하기
+	@RequestMapping("/mybatis/modifyAction.do")
+	public String modifyAction(HttpSession session, MyBoardDTO myBoardDTO) {
+		
+		//로그인 확인
+		if(session.getAttribute("siteUserInfo") == null) {
+			
+			//model.addAttribute("backUrl", "07Mybatis/modify");
+			return "redirect:login.do";
+		}
+		//커맨드객체로 폼값을 한번에 받아서 Mapper로 전달함
+		int applyRow = sqlSession.getMapper(MybatisDAOImpl.class).modify(myBoardDTO);
+		System.out.println("수정처리된 레코드 수 : " + applyRow);
+		return "redirect:list.do";
+	}
+	
+	@RequestMapping("/mybatis/delete.do")
+	public String delete(HttpServletRequest req, HttpSession session) {
+		
+		//로그인확인
+		if(session.getAttribute("siteUserInfo") == null) {
+			return "redirect:login.do";
+		}
+		
+		//Mybatis사용
+		sqlSession.getMapper(MybatisDAOImpl.class).delete(
+				req.getParameter("idx"), ((MemberVO)session.getAttribute("siteUserInfo")).getId());
+		
+		return "redirect:list.do";
 	}
 }
 
