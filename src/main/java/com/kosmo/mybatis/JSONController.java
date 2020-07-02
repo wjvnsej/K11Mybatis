@@ -69,9 +69,9 @@ public class JSONController {
 		//리스트 페이지에 출력할 게시물 가져오기
 		ArrayList<MyBoardDTO> lists = sqlSession.getMapper(MybatisDAOImpl.class).listPage(parameterDTO);
 		
-		//페이지 번호에 대한 처리
-		String path = req.getContextPath() + "/mybatis/list.do?";
-		String pagingImg = PagingUtil.pagingImg(totalRecordCount, pageSize, blockPage, nowPage, path);
+		//페이지 번호에 대한 처리 : Ajax로 처리하기 위해 메소드 변경
+		String pagingImg = PagingUtil.pagingAjax(
+				totalRecordCount, pageSize, blockPage, nowPage, req.getContextPath());
 		model.addAttribute("pagingImg", pagingImg);
 		
 		for(MyBoardDTO dto : lists) {
